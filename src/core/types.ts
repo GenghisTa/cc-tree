@@ -21,6 +21,11 @@ export interface Config {
   port: number;
 }
 
+export interface OpenEditorOptions {
+  editor?: string;
+  filePath: string;
+}
+
 export interface ScanResult {
   files: ClaudeMDFile[];
   mergeContent: string;
