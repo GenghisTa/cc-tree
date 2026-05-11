@@ -10,7 +10,7 @@ export async function scanCommand(options: ScanOptions & { json?: boolean; merge
   }
 
   const { renderTree, renderMergePreview } = await import('./render.js');
-  renderTree(files);
+  renderTree(files, options.cwd);
 
   if (options.merge) {
     const { buildMergeContent } = await import('../core/scanner.js');

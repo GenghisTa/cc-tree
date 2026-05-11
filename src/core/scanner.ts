@@ -9,12 +9,26 @@ function getLevel(path: string, cwd: string): { level: ClaudeMDFile['level']; pr
   const home = homedir();
   const resolved = resolve(path);
 
+  // 用户级: ~/.claude/ 下的所有 CLAUDE.md
   if (resolved.startsWith(resolve(join(home, '.claude')))) {
     return { level: 'user', priority: 1 };
   }
-  if (resolved.startsWith(resolve(cwd)) && resolved !== resolve(join(cwd, 'CLAUDE.md'))) {
+
+  const cwdResolved = resolve(cwd);
+
+  // 项目级: cwd/CLAUDE.md 或 cwd/.claude/CLAUDE.md
+  const cwdRootClaude = resolve(join(cwdResolved, 'CLAUDE.md'));
+  const cwdDotClaude = resolve(join(cwdResolved, '.claude', 'CLAUDE.md'));
+  if (resolved === cwdRootClaude || resolved === cwdDotClaude) {
+    return { level: 'project', priority: 2 };
+  }
+
+  // 子模块级: cwd 下更深层的 CLAUDE.md
+  if (resolved.startsWith(cwdResolved)) {
     return { level: 'submodule', priority: 3 };
   }
+
+  // 兜底: 项目级
   return { level: 'project', priority: 2 };
 }
 
@@ -80,12 +94,21 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
     filePaths.add(f);
   }
 
-  // 6. Custom paths
+  // 6. Custom paths (support explicit level/priority override)
+  const customOverrides = new Map<string, { level?: string; priority?: number }>();
   if (options.customPaths) {
-    for (const p of options.customPaths) {
-      const absPath = resolve(cwd, p);
-      if (existsSync(absPath)) {
-        filePaths.add(absPath);
+    for (const entry of options.customPaths) {
+      if (typeof entry === 'string') {
+        const absPath = resolve(cwd, entry);
+        if (existsSync(absPath)) filePaths.add(absPath);
+      } else {
+        const absPath = resolve(cwd, entry.path);
+        if (existsSync(absPath)) {
+          filePaths.add(absPath);
+          if (entry.level || entry.priority) {
+            customOverrides.set(absPath, { level: entry.level, priority: entry.priority });
+          }
+        }
       }
     }
   }
@@ -95,8 +118,20 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
   for (const filePath of filePaths) {
     try {
       const { headings, content, size } = await parseClaudeMD(filePath);
-      const { level, priority } = getLevel(filePath, cwd);
-      results.push({ path: filePath, level, priority, headings, content, size });
+      const override = customOverrides.get(filePath);
+      if (override) {
+        results.push({
+          path: filePath,
+          level: (override.level as ClaudeMDFile['level']) || getLevel(filePath, cwd).level,
+          priority: override.priority ?? getLevel(filePath, cwd).priority,
+          headings,
+          content,
+          size,
+        });
+      } else {
+        const { level, priority } = getLevel(filePath, cwd);
+        results.push({ path: filePath, level, priority, headings, content, size });
+      }
     } catch {
       // skip unreadable files
     }

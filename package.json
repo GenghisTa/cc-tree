@@ -6,10 +6,17 @@
   "bin": {
     "cmm": "dist/cli/index.js"
   },
+  "files": [
+    "dist/",
+    "src/web/"
+  ],
   "scripts": {
     "dev": "tsx src/cli/index.ts",
-    "build": "tsc",
-    "start": "node dist/cli/index.js"
+    "build": "tsc && node -e \"const{cpSync,mkdirSync,existsSync}=require('fs');const{join}=require('path');const src=join(__dirname,'src','web');const dst=join(__dirname,'dist','web');if(!existsSync(dst))mkdirSync(dst,{recursive:true});cpSync(src,dst,{recursive:true})\"",
+    "start": "node dist/cli/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "chalk": "^5.4.1",
@@ -19,6 +26,7 @@
   "devDependencies": {
     "@types/node": "^22.14.1",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }

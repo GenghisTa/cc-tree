@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { join, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanAll, buildMergeContent } from '../core/scanner.js';
 import type { Config } from '../core/types.js';
@@ -14,7 +14,19 @@ const MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 
-const WEB_DIR = join(fileURLToPath(new URL('..', import.meta.url)), 'web');
+// 兼容 dev (tsx) 和 build (tsc) 两种运行模式
+function resolveWebDir(): string {
+  const thisFile = fileURLToPath(import.meta.url);
+  const isDev = thisFile.includes('src');
+  if (isDev) {
+    // src/cli/serve.ts → src/web/
+    return join(dirname(dirname(thisFile)), 'web');
+  }
+  // dist/cli/serve.js → dist/web/
+  return join(dirname(dirname(thisFile)), 'web');
+}
+
+const WEB_DIR = resolveWebDir();
 
 async function handleAPI(req: URL): Promise<{ status: number; data: unknown }> {
   if (req.pathname === '/api/scan') {

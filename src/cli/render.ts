@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { relative } from 'node:path';
 import type { ClaudeMDFile } from '../core/types.js';
 
 const prioritySymbols: Record<number, string> = { 1: '①', 2: '②', 3: '③' };
@@ -10,11 +11,13 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export function renderTree(files: ClaudeMDFile[]): void {
+export function renderTree(files: ClaudeMDFile[], cwd?: string): void {
   if (files.length === 0) {
     console.log(chalk.yellow('未找到 CLAUDE.md 文件'));
     return;
   }
+
+  const baseDir = cwd || process.cwd();
 
   // Group by level
   const groups: Record<string, ClaudeMDFile[]> = {};
@@ -40,7 +43,7 @@ export function renderTree(files: ClaudeMDFile[]): void {
       const pipe = isLast ? '      ' : '  │   ';
 
       const symbol = prioritySymbols[file.priority] || '④';
-      const relativePath = file.path;
+      const relativePath = relative(baseDir, file.path);
       const sizeStr = chalk.dim(formatSize(file.size));
 
       console.log(`${prefix}${branch}${chalk.cyan(relativePath)} ${chalk.yellow(symbol)} ${sizeStr}`);
@@ -59,8 +62,10 @@ export function renderTree(files: ClaudeMDFile[]): void {
   }
 }
 
-export function renderMergePreview(files: ClaudeMDFile[]): void {
+export function renderMergePreview(files: ClaudeMDFile[], cwd?: string): void {
   if (files.length === 0) return;
+
+  const baseDir = cwd || process.cwd();
 
   const priorityLabels: Record<number, string> = { 1: '① 用户级', 2: '② 项目级', 3: '③ 子模块级' };
   console.log(chalk.bold('\n📋 合并预览（加载顺序）'));
@@ -68,7 +73,8 @@ export function renderMergePreview(files: ClaudeMDFile[]): void {
 
   for (const file of files) {
     const label = priorityLabels[file.priority] || '④ 其他';
-    console.log(`\n${chalk.bold.hex('#FFA500')(`--- ${label}: ${file.path} ---`)}`);
+    const shortPath = relative(baseDir, file.path);
+    console.log(`\n${chalk.bold.hex('#FFA500')(`--- ${label}: ${shortPath} ---`)}`);
     // Show first 10 lines of content as preview
     const lines = file.content.split('\n');
     const preview = lines.slice(0, 10);

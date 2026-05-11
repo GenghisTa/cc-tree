@@ -12,7 +12,7 @@ export interface ClaudeMDFile {
 export interface ScanOptions {
   depth?: number;
   cwd?: string;
-  customPaths?: string[];
+  customPaths?: (string | { path: string; level?: ClaudeMDLevel; priority?: number })[];
 }
 
 export interface Config {
