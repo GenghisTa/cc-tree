@@ -18,8 +18,14 @@ program
   .option('--depth <number>', '递归深度', String, String(getConfig().scanDepth))
   .option('--json', 'JSON 格式输出')
   .option('--merge', '显示合并预览')
+  .option('--open <path>', '用编辑器打开指定文件')
   .action(async (opts) => {
     const depth = parseInt(opts.depth, 10) || getConfig().scanDepth;
+    if (opts.open) {
+      const { openInEditor } = await import('./open-editor.js');
+      await openInEditor({ editor: getConfig().editor, filePath: opts.open });
+      return;
+    }
     await scanCommand({ depth, json: !!opts.json, merge: !!opts.merge });
   });
 
