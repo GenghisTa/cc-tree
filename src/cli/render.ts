@@ -62,30 +62,3 @@ export function renderTree(files: ClaudeMDFile[], cwd?: string): void {
   }
 }
 
-export function renderMergePreview(files: ClaudeMDFile[], cwd?: string): void {
-  if (files.length === 0) return;
-
-  const baseDir = cwd || process.cwd();
-
-  const priorityLabels: Record<number, string> = { 1: '① 用户级', 2: '② 项目级', 3: '③ 子模块级' };
-  console.log(chalk.bold('\n📋 合并预览（加载顺序）'));
-  console.log(chalk.dim('='.repeat(50)));
-
-  for (const file of files) {
-    const label = priorityLabels[file.priority] || '④ 其他';
-    const shortPath = relative(baseDir, file.path);
-    console.log(`\n${chalk.bold.hex('#FFA500')(`--- ${label}: ${shortPath} ---`)}`);
-    // Show first 10 lines of content as preview
-    const lines = file.content.split('\n');
-    const preview = lines.slice(0, 10);
-    for (const line of preview) {
-      if (line.trim()) {
-        console.log(`${chalk.dim('  ')}${line}`);
-      }
-    }
-    if (lines.length > 10) {
-      console.log(chalk.dim(`  ... (${lines.length - 10} more lines)`));
-    }
-  }
-  console.log(chalk.dim('='.repeat(50)));
-}
