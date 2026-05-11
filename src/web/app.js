@@ -73,6 +73,7 @@ function selectFile(el) {
       <span>${file.path.split(/[\\/]/).pop()}</span>
       <div class="actions">
         <button class="btn" onclick="copyPath('${encodeURIComponent(file.path)}')">📋 复制路径</button>
+        <button class="btn btn-primary" onclick="openFile('${encodeURIComponent(file.path)}')">✏️ 编辑</button>
       </div>
     </div>
     <div class="path-text">${file.path}</div>
@@ -117,10 +118,39 @@ function renderMergePreview(content) {
 function copyPath(encodedPath) {
   const path = decodeURIComponent(encodedPath);
   navigator.clipboard.writeText(path).then(() => {
-    const toast = document.getElementById('toast');
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
+    showToast('已复制到剪贴板', 'success');
   });
+}
+
+function showToast(msg, type) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'copy-toast show';
+  if (type === 'error') toast.style.background = '#f85149';
+  else toast.style.background = '#3fb950';
+  setTimeout(() => {
+    toast.classList.remove('show');
+    toast.style.background = '';
+  }, 2000);
+}
+
+async function openFile(encodedPath) {
+  const path = decodeURIComponent(encodedPath);
+  try {
+    const res = await fetch('/api/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(`打开失败: ${err.error}`, 'error');
+    } else {
+      showToast('已打开文件', 'success');
+    }
+  } catch (err) {
+    showToast(`打开失败: ${err.message}`, 'error');
+  }
 }
 
 function escapeHtml(text) {

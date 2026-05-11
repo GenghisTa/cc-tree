@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanAll, buildMergeContent } from '../core/scanner.js';
+import { getConfig } from '../config/config.js';
 import type { Config } from '../core/types.js';
 
 const MIME_TYPES: Record<string, string> = {
@@ -28,11 +29,22 @@ function resolveWebDir(): string {
 
 const WEB_DIR = resolveWebDir();
 
-async function handleAPI(req: URL): Promise<{ status: number; data: unknown }> {
+async function handleAPI(req: URL, method: string, body?: string) {
   if (req.pathname === '/api/scan') {
     const files = await scanAll();
     const mergeContent = buildMergeContent(files);
     return { status: 200, data: { files, mergeContent } };
+  }
+  if (req.pathname === '/api/open' && method === 'POST' && body) {
+    try {
+      const { path } = JSON.parse(body);
+      if (!path) return { status: 400, data: { error: 'path required' } };
+      const { openInEditor } = await import('./open-editor.js');
+      await openInEditor({ editor: getConfig().editor, filePath: path });
+      return { status: 200, data: { ok: true } };
+    } catch (err) {
+      return { status: 500, data: { error: String(err) } };
+    }
   }
   return { status: 404, data: { error: 'not found' } };
 }
@@ -62,7 +74,12 @@ export function startServer(config: Config) {
       res.setHeader('Access-Control-Allow-Origin', '*');
 
       if (url.pathname.startsWith('/api/')) {
-        const result = await handleAPI(url);
+        const body: string | undefined = req.method === 'POST' ? await new Promise<string>((resolve) => {
+          let data = '';
+          req.on('data', (chunk) => data += chunk);
+          req.on('end', () => resolve(data));
+        }) : undefined;
+        const result = await handleAPI(url, req.method!, body);
         res.writeHead(result.status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result.data));
         return;
