@@ -29,7 +29,8 @@
       "Bash(curl -s http://localhost:3088/)",
       "Bash(gh api *)",
       "Bash(python -c ' *)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(curl -s http://localhost:3000/api/scan)"
     ]
   }
 }
