@@ -6,6 +6,10 @@ import type { ClaudeMDFile, ScanOptions } from './types.js';
 import { parseClaudeMD } from './parser.js';
 import { discoverProjects } from './projects.js';
 
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
 function getLevel(path: string, cwd: string): { level: ClaudeMDFile['level']; priority: number } {
   const home = homedir();
   const resolved = resolve(path);
@@ -96,13 +100,13 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
         deep: 3,
         ignore: ['node_modules', '.git'],
       });
-      for (const f of globalFiles) filePaths.add(f);
+      for (const f of globalFiles) filePaths.add(normalizePath(f));
     }
   } catch {
     // ~/.claude/ may contain inaccessible symlinks on Windows
   }
   const homeClaude = join(home, 'CLAUDE.md');
-  if (existsSync(homeClaude)) filePaths.add(homeClaude);
+  if (existsSync(homeClaude)) filePaths.add(normalizePath(homeClaude));
 
   if (isGlobal) {
     // --- Global mode: scan all discovered projects ---
@@ -123,7 +127,7 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
       // Scan root CLAUDE.md and CLAUDE.local.md
       for (const pattern of PROJECT_SCAN_PATTERNS) {
         const rootFile = join(projectDir, pattern.replace('**/', ''));
-        if (existsSync(rootFile)) filePaths.add(rootFile);
+        if (existsSync(rootFile)) filePaths.add(normalizePath(rootFile));
       }
 
       // Scan recursively
@@ -134,7 +138,7 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
           deep: depth,
           ignore: ['node_modules', '.git', '**/node_modules/**', '**/.git/**'],
         });
-        for (const f of subFiles) filePaths.add(f);
+        for (const f of subFiles) filePaths.add(normalizePath(f));
       } catch {
         // skip inaccessible project dirs
       }
@@ -142,7 +146,7 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
   } else {
     // --- Legacy mode: scan only cwd ---
     const cwdClaude = join(cwd, 'CLAUDE.md');
-    if (existsSync(cwdClaude)) filePaths.add(cwdClaude);
+    if (existsSync(cwdClaude)) filePaths.add(normalizePath(cwdClaude));
 
     const subFiles = await fg('**/CLAUDE.md', {
       cwd,
@@ -155,7 +159,7 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
       if (rel.startsWith('..') || rel === 'CLAUDE.md' || rel.startsWith('.claude/CLAUDE.md')) {
         continue;
       }
-      filePaths.add(f);
+      filePaths.add(normalizePath(f));
     }
 
     // Scan .claude/ subdirectories
@@ -165,7 +169,7 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
       deep: depth,
       ignore: ['**/node_modules/**'],
     });
-    for (const f of dotClaudeFiles) filePaths.add(f);
+    for (const f of dotClaudeFiles) filePaths.add(normalizePath(f));
   }
 
   // Custom paths (always honored regardless of mode)
@@ -174,11 +178,11 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
     for (const entry of options.customPaths) {
       if (typeof entry === 'string') {
         const absPath = resolve(cwd, entry);
-        if (existsSync(absPath)) filePaths.add(absPath);
+        if (existsSync(absPath)) filePaths.add(normalizePath(absPath));
       } else {
         const absPath = resolve(cwd, entry.path);
         if (existsSync(absPath)) {
-          filePaths.add(absPath);
+          filePaths.add(normalizePath(absPath));
           if (entry.level || entry.priority) {
             customOverrides.set(absPath, { level: entry.level, priority: entry.priority });
           }

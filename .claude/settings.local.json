@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test *)",
+      "Bash(npx vitest *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit --amend -m ' *)",
+      "Bash(git -C /d/Project/cc-tree rev-parse a8b709d)",
+      "Bash(git -C /d/Project/cc-tree rev-parse fc7f062)",
+      "Bash(npx tsc *)",
+      "Bash(ls trace_output)",
+      "Bash(git *)",
+      "Bash(npx *)",
+      "Bash(npx -w /d/Project/cc-tree tsc --noEmit)",
+      "Bash(node dist/cli/index.js scan --help)",
+      "Bash(node dist/cli/index.js config get)",
+      "Bash(node dist/cli/index.js scan)",
+      "Bash(timeout 3 node dist/cli/index.js serve --port 3099)",
+      "Bash(node -e \"const { fileURLToPath } = require\\('url'\\); const { join, dirname } = require\\('path'\\); const u = fileURLToPath\\('file:///D:/Project/cc-tree/src/cli/serve.ts'\\); console.log\\('src path:', join\\(dirname\\(dirname\\(u\\)\\), 'web'\\)\\);\")",
+      "Bash(gh repo *)",
+      "Bash(curl -s http://localhost:3099/api/scan)",
+      "Bash(node -e \"process.stdin.on\\('data',d=>{const r=JSON.parse\\(d\\);console.log\\('files:',r.files?.length,'mergeContent:',r.mergeContent?.length\\)}\\)\")",
+      "Bash(curl -v http://localhost:3099/api/scan)",
+      "Bash(node dist/cli/index.js serve --port 3088)",
+      "Bash(curl -s http://localhost:3088/api/scan)",
+      "Bash(node -e ' *)",
+      "Bash(curl -s http://localhost:3088/)",
+      "Bash(curl -s http://localhost:3088/)",
+      "Bash(gh api *)",
+      "Bash(python -c ' *)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

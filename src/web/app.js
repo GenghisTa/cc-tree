@@ -96,7 +96,7 @@ function renderTree(files) {
       const encodedPath = encodeURIComponent(file.path);
       const name = file.path.split(/[\\/]/).pop();
       const symbol = PRIORITY_SYMBOLS[file.priority] || '④';
-      html += `<div class="file-item" data-path="${encodedPath}" onclick="selectFile(this)">
+      html += `<div class="file-item" data-path="${encodedPath}" data-depth="0" onclick="selectFile(this)">
         <span class="file-icon">${symbol}</span>
         <span class="file-name">${name}</span>
         <span class="size">${formatSize(file.size)}</span>
@@ -114,11 +114,13 @@ function renderTree(files) {
     for (const file of group.files) {
       const encodedPath = encodeURIComponent(file.path);
       const name = file.path.split(/[\\/]/).pop();
-      const relPath = file.projectPath ? file.path.slice(file.projectPath.length).replace(/^[\\/]+/, '') : name;
+      const relDir = file.projectPath ? file.path.slice(file.projectPath.length).replace(/^[\\/]+/, '') : name;
+      const depth = relDir.split(/[\\/]/).filter(Boolean).length - 1;
+      const indent = Math.min(Math.max(depth, 0), 3);
       const symbol = PRIORITY_SYMBOLS[file.priority] || '④';
-      html += `<div class="file-item" data-path="${encodedPath}" onclick="selectFile(this)">
+      html += `<div class="file-item" data-path="${encodedPath}" data-depth="${indent}" onclick="selectFile(this)" style="padding-left:${20 + indent * 16}px">
         <span class="file-icon">${symbol}</span>
-        <span class="file-name">${escapeHtml(relPath)}</span>
+        <span class="file-name">${escapeHtml(name)}</span>
         <span class="size">${formatSize(file.size)}</span>
       </div>`;
     }
