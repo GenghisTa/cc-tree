@@ -18,22 +18,23 @@ const MIME_TYPES: Record<string, string> = {
 // 兼容 dev (tsx) 和 build (tsc) 两种运行模式
 function resolveWebDir(): string {
   const thisFile = fileURLToPath(import.meta.url);
-  const isDev = thisFile.includes('src');
-  if (isDev) {
-    // src/cli/serve.ts → src/web/
-    return join(dirname(dirname(thisFile)), 'web');
-  }
-  // dist/cli/serve.js → dist/web/
-  return join(dirname(dirname(thisFile)), 'web');
+  // src/cli/serve.ts → src/cli/ → src/ → src/web/
+  // dist/cli/serve.js → dist/cli/ → dist/ → dist/web/
+  const base = dirname(dirname(thisFile));
+  return join(base, 'web');
 }
 
 const WEB_DIR = resolveWebDir();
 
 async function handleAPI(req: URL, method: string, body?: string) {
   if (req.pathname === '/api/scan') {
-    const files = await scanAll();
+    const projectFilter = req.searchParams.get('project') || undefined;
+    const local = req.searchParams.get('local') === 'true';
+    const files = await scanAll({ projectFilter, global: !local });
     const mergeContent = buildMergeContent(files);
-    return { status: 200, data: { files, mergeContent } };
+    // Collect unique project paths for the UI dropdown
+    const projects = [...new Set(files.filter(f => f.projectPath).map(f => f.projectPath as string))];
+    return { status: 200, data: { files, mergeContent, projects } };
   }
   if (req.pathname === '/api/open' && method === 'POST' && body) {
     try {

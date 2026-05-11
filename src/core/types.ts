@@ -7,12 +7,16 @@ export interface ClaudeMDFile {
   headings: string[];
   content: string;
   size: number;
+  projectPath?: string;
+  projectName?: string;
 }
 
 export interface ScanOptions {
   depth?: number;
   cwd?: string;
   customPaths?: (string | { path: string; level?: ClaudeMDLevel; priority?: number })[];
+  projectFilter?: string;
+  global?: boolean;
 }
 
 export interface Config {
@@ -26,7 +30,14 @@ export interface OpenEditorOptions {
   filePath: string;
 }
 
+export interface ProjectInfo {
+  encodedName: string;
+  projectPath: string;
+  source: 'projects-dir' | 'home' | 'claude-dir';
+}
+
 export interface ScanResult {
   files: ClaudeMDFile[];
   mergeContent: string;
+  projects?: string[];
 }

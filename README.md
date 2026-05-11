@@ -16,8 +16,11 @@ npm install -g cmm
 # 终端树形展示
 cmm scan
 
-# JSON 格式输出
-cmm list --json
+# JSON 格式输出（始终为 JSON）
+cmm list
+
+# 或 scan 命令加 --json
+cmm scan --json
 
 # 显示合并预览
 cmm scan --merge

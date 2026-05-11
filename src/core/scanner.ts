@@ -1,100 +1,174 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import fg from 'fast-glob';
 import type { ClaudeMDFile, ScanOptions } from './types.js';
 import { parseClaudeMD } from './parser.js';
+import { discoverProjects } from './projects.js';
 
 function getLevel(path: string, cwd: string): { level: ClaudeMDFile['level']; priority: number } {
   const home = homedir();
   const resolved = resolve(path);
 
-  // 用户级: ~/.claude/ 下的所有 CLAUDE.md
   if (resolved.startsWith(resolve(join(home, '.claude')))) {
     return { level: 'user', priority: 1 };
   }
 
   const cwdResolved = resolve(cwd);
-
-  // 项目级: cwd/CLAUDE.md 或 cwd/.claude/CLAUDE.md
   const cwdRootClaude = resolve(join(cwdResolved, 'CLAUDE.md'));
   const cwdDotClaude = resolve(join(cwdResolved, '.claude', 'CLAUDE.md'));
   if (resolved === cwdRootClaude || resolved === cwdDotClaude) {
     return { level: 'project', priority: 2 };
   }
 
-  // 子模块级: cwd 下更深层的 CLAUDE.md
   if (resolved.startsWith(cwdResolved)) {
     return { level: 'submodule', priority: 3 };
   }
 
-  // 兜底: 项目级
   return { level: 'project', priority: 2 };
 }
 
-function shouldSkipDir(dir: string): boolean {
-  const base = dir.split(/[\\/]/).pop() || '';
-  return ['node_modules', '.git', '.svn', '.hg', 'dist', '.next', '.cache'].includes(base);
+/**
+ * Determine level in global mode using the project path as the anchor
+ */
+function getLevelGlobal(filePath: string, projectPaths: string[]): { level: ClaudeMDFile['level']; priority: number } {
+  const resolved = resolve(filePath);
+  const home = homedir();
+
+  // Home / ~/.claude files are always user level
+  if (resolved.startsWith(resolve(join(home, '.claude'))) || resolved === resolve(join(home, 'CLAUDE.md'))) {
+    return { level: 'user', priority: 1 };
+  }
+
+  // Check against known project paths
+  for (const pp of projectPaths) {
+    const ppResolved = resolve(pp);
+    if (resolved === resolve(join(ppResolved, 'CLAUDE.md')) || resolved === resolve(join(ppResolved, '.claude', 'CLAUDE.md'))) {
+      return { level: 'project', priority: 2 };
+    }
+  }
+  for (const pp of projectPaths) {
+    const ppResolved = resolve(pp);
+    if (resolved.startsWith(ppResolved)) {
+      return { level: 'submodule', priority: 3 };
+    }
+  }
+
+  return { level: 'project', priority: 2 };
 }
+
+function getProjectInfo(filePath: string, projectPaths: Map<string, string>): { projectPath?: string; projectName?: string } {
+  const resolved = resolve(filePath);
+  let best = '';
+  for (const [pp, encodedName] of projectPaths) {
+    const ppResolved = resolve(pp);
+    if (resolved.startsWith(ppResolved) && ppResolved.length > best.length) {
+      best = pp;
+    }
+  }
+  if (best) {
+    return { projectPath: best, projectName: basename(best) };
+  }
+  return {};
+}
+
+// Files to scan per project
+const PROJECT_SCAN_PATTERNS = [
+  '**/CLAUDE.md',
+  '**/CLAUDE.local.md',
+];
 
 export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]> {
   const cwd = resolve(options.cwd || process.cwd());
   const depth = options.depth ?? 5;
   const home = homedir();
+  const isGlobal = options.global !== false;
 
   const filePaths = new Set<string>();
 
-  // 1. Scan ~/.claude/ for CLAUDE.md
+  // --- Always scan home + ~/.claude ---
   const claudeDir = join(home, '.claude');
-  if (existsSync(claudeDir)) {
-    const globalFiles = await fg('**/CLAUDE.md', {
-      cwd: claudeDir,
-      absolute: true,
-      deep: 3,
-      ignore: ['node_modules', '.git'],
-    });
-    for (const f of globalFiles) filePaths.add(f);
-  }
-
-  // 2. Scan home directory for ~/CLAUDE.md
-  const homeClaude = join(home, 'CLAUDE.md');
-  if (existsSync(homeClaude)) {
-    filePaths.add(homeClaude);
-  }
-
-  // 3. Scan cwd root for CLAUDE.md
-  const cwdClaude = join(cwd, 'CLAUDE.md');
-  if (existsSync(cwdClaude)) {
-    filePaths.add(cwdClaude);
-  }
-
-  // 4. Scan cwd subdirectories recursively
-  const subFiles = await fg('**/CLAUDE.md', {
-    cwd,
-    absolute: true,
-    deep: depth,
-    ignore: ['node_modules', '.git', '**/node_modules/**', '**/.git/**'],
-  });
-  for (const f of subFiles) {
-    const rel = relative(cwd, f);
-    if (rel.startsWith('..') || rel === 'CLAUDE.md' || rel.startsWith('.claude/CLAUDE.md')) {
-      continue;
+  try {
+    if (existsSync(claudeDir)) {
+      const globalFiles = await fg('**/CLAUDE.md', {
+        cwd: claudeDir,
+        absolute: true,
+        deep: 3,
+        ignore: ['node_modules', '.git'],
+      });
+      for (const f of globalFiles) filePaths.add(f);
     }
-    filePaths.add(f);
+  } catch {
+    // ~/.claude/ may contain inaccessible symlinks on Windows
+  }
+  const homeClaude = join(home, 'CLAUDE.md');
+  if (existsSync(homeClaude)) filePaths.add(homeClaude);
+
+  if (isGlobal) {
+    // --- Global mode: scan all discovered projects ---
+    const projects = discoverProjects();
+
+    for (const project of projects) {
+      // Apply project filter if set
+      if (options.projectFilter) {
+        const filterPath = resolve(options.projectFilter);
+        if (!project.projectPath.toLowerCase().startsWith(filterPath.toLowerCase())) {
+          continue;
+        }
+      }
+
+      const projectDir = project.projectPath;
+      if (!existsSync(projectDir)) continue;
+
+      // Scan root CLAUDE.md and CLAUDE.local.md
+      for (const pattern of PROJECT_SCAN_PATTERNS) {
+        const rootFile = join(projectDir, pattern.replace('**/', ''));
+        if (existsSync(rootFile)) filePaths.add(rootFile);
+      }
+
+      // Scan recursively
+      try {
+        const subFiles = await fg('**/CLAUDE.md', {
+          cwd: projectDir,
+          absolute: true,
+          deep: depth,
+          ignore: ['node_modules', '.git', '**/node_modules/**', '**/.git/**'],
+        });
+        for (const f of subFiles) filePaths.add(f);
+      } catch {
+        // skip inaccessible project dirs
+      }
+    }
+  } else {
+    // --- Legacy mode: scan only cwd ---
+    const cwdClaude = join(cwd, 'CLAUDE.md');
+    if (existsSync(cwdClaude)) filePaths.add(cwdClaude);
+
+    const subFiles = await fg('**/CLAUDE.md', {
+      cwd,
+      absolute: true,
+      deep: depth,
+      ignore: ['node_modules', '.git', '**/node_modules/**', '**/.git/**'],
+    });
+    for (const f of subFiles) {
+      const rel = relative(cwd, f);
+      if (rel.startsWith('..') || rel === 'CLAUDE.md' || rel.startsWith('.claude/CLAUDE.md')) {
+        continue;
+      }
+      filePaths.add(f);
+    }
+
+    // Scan .claude/ subdirectories
+    const dotClaudeFiles = await fg('.claude/**/CLAUDE.md', {
+      cwd,
+      absolute: true,
+      deep: depth,
+      ignore: ['**/node_modules/**'],
+    });
+    for (const f of dotClaudeFiles) filePaths.add(f);
   }
 
-  // 5. Scan .claude/ subdirectories for CLAUDE.md (project-level .claude/CLAUDE.md)
-  const dotClaudeFiles = await fg('.claude/**/CLAUDE.md', {
-    cwd,
-    absolute: true,
-    deep: depth,
-    ignore: ['**/node_modules/**'],
-  });
-  for (const f of dotClaudeFiles) {
-    filePaths.add(f);
-  }
-
-  // 6. Custom paths (support explicit level/priority override)
+  // Custom paths (always honored regardless of mode)
   const customOverrides = new Map<string, { level?: string; priority?: number }>();
   if (options.customPaths) {
     for (const entry of options.customPaths) {
@@ -113,25 +187,37 @@ export async function scanAll(options: ScanOptions = {}): Promise<ClaudeMDFile[]
     }
   }
 
+  // Build project path index for enrichment
+  const projectPaths = new Map<string, string>();
+  if (isGlobal) {
+    for (const project of discoverProjects()) {
+      projectPaths.set(project.projectPath, project.encodedName);
+    }
+  } else {
+    projectPaths.set(cwd, basename(cwd));
+  }
+
   // Parse all files
   const results: ClaudeMDFile[] = [];
   for (const filePath of filePaths) {
     try {
       const { headings, content, size } = await parseClaudeMD(filePath);
       const override = customOverrides.get(filePath);
+
+      let level: ClaudeMDFile['level'];
+      let priority: number;
       if (override) {
-        results.push({
-          path: filePath,
-          level: (override.level as ClaudeMDFile['level']) || getLevel(filePath, cwd).level,
-          priority: override.priority ?? getLevel(filePath, cwd).priority,
-          headings,
-          content,
-          size,
-        });
+        level = (override.level as ClaudeMDFile['level']) || getLevel(filePath, cwd).level;
+        priority = override.priority ?? getLevel(filePath, cwd).priority;
+      } else if (isGlobal) {
+        ({ level, priority } = getLevelGlobal(filePath, [...projectPaths.keys()]));
       } else {
-        const { level, priority } = getLevel(filePath, cwd);
-        results.push({ path: filePath, level, priority, headings, content, size });
+        ({ level, priority } = getLevel(filePath, cwd));
       }
+
+      const { projectPath, projectName } = isGlobal ? getProjectInfo(filePath, projectPaths) : {};
+
+      results.push({ path: filePath, level, priority, headings, content, size, projectPath, projectName });
     } catch {
       // skip unreadable files
     }

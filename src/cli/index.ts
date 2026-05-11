@@ -14,8 +14,10 @@ program
 
 program
   .command('scan')
-  .description('扫描并展示 CLAUDE.md 层级树')
+  .description('扫描并展示 CLAUDE.md 层级树（默认全局扫描）')
   .option('--depth <number>', '递归深度', String, String(getConfig().scanDepth))
+  .option('--project <path>', '仅扫描指定项目路径')
+  .option('--local', '仅扫描当前目录（不全局扫描）')
   .option('--json', 'JSON 格式输出')
   .option('--merge', '显示合并预览')
   .option('--open <path>', '用编辑器打开指定文件')
@@ -26,15 +28,16 @@ program
       await openInEditor({ editor: getConfig().editor, filePath: opts.open });
       return;
     }
-    await scanCommand({ depth, json: !!opts.json, merge: !!opts.merge });
+    await scanCommand({ depth, json: !!opts.json, merge: !!opts.merge, projectFilter: opts.project, global: !opts.local });
   });
 
 program
   .command('list')
-  .description('JSON 格式输出扫描结果')
-  .option('--json', 'JSON 格式输出')
-  .action(async () => {
-    await scanCommand({ json: true });
+  .description('JSON 格式输出扫描结果（默认全局扫描）')
+  .option('--project <path>', '仅扫描指定项目路径')
+  .option('--local', '仅扫描当前目录')
+  .action(async (opts) => {
+    await scanCommand({ json: true, projectFilter: opts.project, global: !opts.local });
   });
 
 program
