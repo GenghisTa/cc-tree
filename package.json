@@ -1,0 +1,24 @@
+{
+  "name": "cmm",
+  "version": "0.1.0",
+  "description": "CC-tree — CLAUDE.md context map for Claude Code",
+  "type": "module",
+  "bin": {
+    "cmm": "dist/cli/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli/index.ts",
+    "build": "tsc",
+    "start": "node dist/cli/index.js"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "fast-glob": "^3.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3"
+  }
+}
