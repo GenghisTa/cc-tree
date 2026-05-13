@@ -8,6 +8,7 @@ const LEVEL_ORDER = ['user', 'project', 'submodule'];
 
 let scanData = null;
 let currentFilter = '';
+let currentView = 'overview';
 
 async function loadData() {
   const statusEl = document.getElementById('status');
@@ -26,6 +27,7 @@ async function loadData() {
     document.getElementById('header-subtitle').textContent = filter
       ? `项目: ${filter} — ${scanData.files.length} 个 CLAUDE.md 文件`
       : `全局扫描 — ${scanData.files.length} 个 CLAUDE.md 文件`;
+    renderOverview();
   } catch (err) {
     document.getElementById('tree-container').innerHTML =
       `<div style="color:#dc2626;font-size:13px;padding:8px">扫描失败: ${err.message}</div>`;
@@ -65,6 +67,84 @@ function populateProjectFilter(projects) {
     }
   }
   select.value = currentVal || '';
+}
+
+function showOverview() {
+  currentView = 'overview';
+  renderOverview();
+}
+
+function renderOverview() {
+  const main = document.getElementById('main-panel');
+  const files = scanData.files;
+  if (!files || files.length === 0) {
+    main.innerHTML = '<div class="main-empty"><div class="empty-icon">📄</div><div>未找到 CLAUDE.md 文件</div></div>';
+    return;
+  }
+
+  const userFiles = files.filter(f => f.level === 'user' || (!f.projectPath && f.priority === 1));
+  const projectFiles = files.filter(f => f.level !== 'user' && f.projectPath);
+
+  const projects = {};
+  for (const f of projectFiles) {
+    const key = f.projectPath || '__other';
+    if (!projects[key]) {
+      projects[key] = { path: key, name: f.projectName || key.split(/[\\/]/).pop(), files: [], totalSize: 0 };
+    }
+    projects[key].files.push(f);
+    projects[key].totalSize += f.size;
+  }
+
+  const projectKeys = Object.keys(projects).sort();
+  const totalSize = files.reduce((s, f) => s + f.size, 0);
+
+  let html = '<div class="overview-container">';
+
+  html += '<div class="tree-root">📄 全部 CLAUDE.md <span class="tree-root-count">' + files.length + ' 个文件 · ' + formatSize(totalSize) + '</span></div>';
+
+  html += '<div class="tree-branch">';
+
+  // User branch
+  html += '<div class="tree-limb">';
+  html += '<div class="tree-node"><div class="tree-connector-top"></div><div class="tree-card tree-card-user" onclick="selectFileByPath(\'' + (userFiles.length > 0 ? encodeURIComponent(userFiles[0].path) : '') + '\')"><div class="tree-card-name">👤 用户级</div><div class="tree-card-meta">' + userFiles.length + ' 个文件 · ' + formatSize(userFiles.reduce((s, f) => s + f.size, 0)) + '</div></div></div>';
+  if (userFiles.length > 0) {
+    html += '<div class="tree-children">';
+    for (const f of userFiles) {
+      const name = f.path.split(/[\\/]/).pop();
+      html += '<div class="tree-leaf"><div class="tree-connector-h"></div><div class="tree-card tree-card-file tree-depth-0" onclick="selectFileByPath(\'' + encodeURIComponent(f.path) + '\')"><span class="tree-card-name">' + (PRIORITY_SYMBOLS[f.priority] || '④') + ' ' + escapeHtml(name) + '</span><span class="tree-card-meta">' + formatSize(f.size) + '</span></div></div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Project branch
+  html += '<div class="tree-limb">';
+  html += '<div class="tree-node"><div class="tree-connector-top"></div><div class="tree-card tree-card-project" style="cursor:default"><div class="tree-card-name">📁 项目级</div><div class="tree-card-meta">' + projectKeys.length + ' 个项目 · ' + projectFiles.length + ' 个文件</div></div></div>';
+  if (projectKeys.length > 0) {
+    html += '<div class="tree-children">';
+    for (const key of projectKeys) {
+      const proj = projects[key];
+      const subFiles = proj.files.filter(f => f.level === 'submodule' || f.priority === 3);
+      html += '<div class="tree-leaf"><div class="tree-connector-h"></div><div class="tree-card tree-card-project-item tree-depth-1"><div class="tree-card-name">📂 ' + escapeHtml(proj.name) + '</div><div class="tree-card-meta">' + formatSize(proj.totalSize) + '</div></div>';
+      if (subFiles.length > 0) {
+        html += '<div class="tree-children">';
+        for (let i = 0; i < Math.min(subFiles.length, 8); i++) {
+          const sf = subFiles[i];
+          html += '<div class="tree-leaf"><div class="tree-connector-h"></div><div class="tree-card tree-card-file tree-depth-2" onclick="selectFileByPath(\'' + encodeURIComponent(sf.path) + '\')"><span class="tree-card-name">' + (PRIORITY_SYMBOLS[sf.priority] || '④') + ' ' + escapeHtml(sf.path.split(/[\\/]/).pop()) + '</span><span class="tree-card-meta">' + formatSize(sf.size) + '</span></div></div>';
+        }
+        if (subFiles.length > 8) {
+          html += '<div class="tree-leaf"><div class="tree-connector-h"></div><div class="tree-card-more">... 还有 ' + (subFiles.length - 8) + ' 个文件</div></div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  html += '</div></div>';
+  main.innerHTML = html;
 }
 
 function renderTree(files) {
@@ -139,11 +219,28 @@ function formatSize(bytes) {
 function selectFile(el) {
   document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
   el.classList.add('active');
-
   const path = decodeURIComponent(el.dataset.path);
   const file = scanData.files.find(f => f.path === path);
   if (!file) return;
+  currentView = 'detail-' + path;
+  showFileDetail(file);
+}
 
+function selectFileByPath(encodedPath) {
+  if (!encodedPath) return;
+  const path = decodeURIComponent(encodedPath);
+  const file = scanData.files.find(f => f.path === path);
+  if (!file) return;
+
+  document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
+  const sidebarItem = document.querySelector('.file-item[data-path="' + encodeURIComponent(path) + '"]');
+  if (sidebarItem) sidebarItem.classList.add('active');
+
+  currentView = 'detail-' + path;
+  showFileDetail(file);
+}
+
+function showFileDetail(file) {
   const main = document.getElementById('main-panel');
   const name = file.path.split(/[\\/]/).pop();
   const cfg = LEVEL_CONFIG[file.level] || {};
@@ -182,6 +279,7 @@ function selectFile(el) {
         <div class="file-path">${escapeHtml(file.path)}</div>
       </div>
       <div class="actions">
+        <button class="btn" onclick="showOverview()">← 返回总览</button>
         <button class="btn" onclick="copyPath('${encodeURIComponent(file.path)}')">复制路径</button>
         <button class="btn btn-primary" onclick="openFile('${encodeURIComponent(file.path)}')">编辑</button>
       </div>
@@ -244,6 +342,36 @@ async function openFile(encodedPath) {
     showToast(`打开失败: ${err.message}`, 'error');
   }
 }
+
+// ===== Theme toggle: light → dark → system =====
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme') || 'system';
+  const next = current === 'light' ? 'dark' : (current === 'dark' ? 'system' : 'light');
+  applyTheme(next);
+}
+
+function applyTheme(theme) {
+  const html = document.documentElement;
+  const btn = document.getElementById('theme-toggle');
+  if (theme === 'system') {
+    html.removeAttribute('data-theme');
+    localStorage.removeItem('cc-tree-theme');
+    btn.textContent = '💻';
+    btn.title = '跟随系统';
+  } else {
+    html.setAttribute('data-theme', theme);
+    localStorage.setItem('cc-tree-theme', theme);
+    btn.textContent = theme === 'light' ? '🌞' : '🌜';
+    btn.title = theme === 'light' ? '浅色主题' : '深色主题';
+  }
+}
+
+// Init theme from localStorage
+(function initTheme() {
+  const saved = localStorage.getItem('cc-tree-theme');
+  if (saved) applyTheme(saved);
+})();
 
 function escapeHtml(text) {
   const div = document.createElement('div');
