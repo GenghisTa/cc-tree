@@ -97,43 +97,57 @@ function renderOverview() {
 
   const projectKeys = Object.keys(projects).sort();
   const totalSize = files.reduce((s, f) => s + f.size, 0);
+  const userTotalSize = userFiles.reduce((s, f) => s + f.size, 0);
 
   let html = '<div class="overview-container">';
 
+  // === Root node ===
   html += '<div class="tree-root">📄 全部 CLAUDE.md <span class="tree-root-count">' + files.length + ' 个文件 · ' + formatSize(totalSize) + '</span></div>';
 
-  html += '<div class="tree-branch">';
+  // === Level 1 branch connectors: root splits into two ===
+  html += '<div class="tree-split">';
+  html += '<div class="tree-split-line"></div>';
+  html += '</div>';
 
-  // User branch
-  html += '<div class="tree-limb">';
-  html += '<div class="tree-node"><div class="tree-connector-top"></div><div class="tree-card tree-card-user" onclick="selectFileByPath(\'' + (userFiles.length > 0 ? encodeURIComponent(userFiles[0].path) : '') + '\')"><div class="tree-card-name">👤 用户级</div><div class="tree-card-meta">' + userFiles.length + ' 个文件 · ' + formatSize(userFiles.reduce((s, f) => s + f.size, 0)) + '</div></div></div>';
+  // === Level 2: two cards side by side (user level + project level) ===
+  html += '<div class="tree-level-2">';
+
+  // User level card
+  html += '<div class="tree-level-2-item">';
+  html += '<div class="tree-connector-down"></div>';
+  html += '<div class="tree-card tree-card-user"><div class="tree-card-name">👤 用户级</div><div class="tree-card-meta">' + userFiles.length + ' 个文件 · ' + formatSize(userTotalSize) + '</div></div>';
+  // User file children
   if (userFiles.length > 0) {
-    html += '<div class="tree-children">';
+    html += '<div class="tree-level-3">';
     for (const f of userFiles) {
       const name = f.path.split(/[\\/]/).pop();
-      html += '<div class="tree-leaf"><div class="tree-connector-h"></div><div class="tree-card tree-card-file tree-depth-0" onclick="selectFileByPath(\'' + encodeURIComponent(f.path) + '\')"><span class="tree-card-name">' + (PRIORITY_SYMBOLS[f.priority] || '④') + ' ' + escapeHtml(name) + '</span><span class="tree-card-meta">' + formatSize(f.size) + '</span></div></div>';
+      html += '<div class="tree-level-3-item"><div class="tree-connector-down-short"></div><div class="tree-card tree-card-file tree-depth-0" onclick="selectFileByPath(\'' + encodeURIComponent(f.path) + '\')"><span class="tree-card-name">' + (PRIORITY_SYMBOLS[f.priority] || '④') + ' ' + escapeHtml(name) + '</span><span class="tree-card-meta">' + formatSize(f.size) + '</span></div></div>';
     }
     html += '</div>';
   }
   html += '</div>';
 
-  // Project branch
-  html += '<div class="tree-limb">';
-  html += '<div class="tree-node"><div class="tree-connector-top"></div><div class="tree-card tree-card-project" style="cursor:default"><div class="tree-card-name">📁 项目级</div><div class="tree-card-meta">' + projectKeys.length + ' 个项目 · ' + projectFiles.length + ' 个文件</div></div></div>';
+  // Project level card
+  html += '<div class="tree-level-2-item">';
+  html += '<div class="tree-connector-down"></div>';
+  html += '<div class="tree-card tree-card-project" style="cursor:default"><div class="tree-card-name">📁 项目级</div><div class="tree-card-meta">' + projectKeys.length + ' 个项目 · ' + projectFiles.length + ' 个文件</div></div>';
+  // Project children
   if (projectKeys.length > 0) {
-    html += '<div class="tree-children">';
+    html += '<div class="tree-level-3">';
     for (const key of projectKeys) {
       const proj = projects[key];
       const subFiles = proj.files.filter(f => f.level === 'submodule' || f.priority === 3);
-      html += '<div class="tree-leaf"><div class="tree-connector-h"></div><div class="tree-card tree-card-project-item tree-depth-1"><div class="tree-card-name">📂 ' + escapeHtml(proj.name) + '</div><div class="tree-card-meta">' + formatSize(proj.totalSize) + '</div></div>';
+      const rootFiles = proj.files.filter(f => f.level !== 'submodule' && f.priority !== 3);
+      html += '<div class="tree-level-3-item"><div class="tree-connector-down-short"></div><div class="tree-card tree-card-project-item tree-depth-1"><div class="tree-card-name">📂 ' + escapeHtml(proj.name) + '</div><div class="tree-card-meta">' + formatSize(proj.totalSize) + '</div></div>';
+      // Submodule children (level 4)
       if (subFiles.length > 0) {
-        html += '<div class="tree-children">';
+        html += '<div class="tree-level-4">';
         for (let i = 0; i < Math.min(subFiles.length, 8); i++) {
           const sf = subFiles[i];
-          html += '<div class="tree-leaf"><div class="tree-connector-h"></div><div class="tree-card tree-card-file tree-depth-2" onclick="selectFileByPath(\'' + encodeURIComponent(sf.path) + '\')"><span class="tree-card-name">' + (PRIORITY_SYMBOLS[sf.priority] || '④') + ' ' + escapeHtml(sf.path.split(/[\\/]/).pop()) + '</span><span class="tree-card-meta">' + formatSize(sf.size) + '</span></div></div>';
+          html += '<div class="tree-level-4-item"><div class="tree-connector-down-short"></div><div class="tree-card tree-card-file tree-depth-2" onclick="selectFileByPath(\'' + encodeURIComponent(sf.path) + '\')"><span class="tree-card-name">' + (PRIORITY_SYMBOLS[sf.priority] || '④') + ' ' + escapeHtml(sf.path.split(/[\\/]/).pop()) + '</span><span class="tree-card-meta">' + formatSize(sf.size) + '</span></div></div>';
         }
         if (subFiles.length > 8) {
-          html += '<div class="tree-leaf"><div class="tree-connector-h"></div><div class="tree-card-more">... 还有 ' + (subFiles.length - 8) + ' 个文件</div></div>';
+          html += '<div class="tree-level-4-item"><div class="tree-connector-down-short"></div><div class="tree-card-more">... 还有 ' + (subFiles.length - 8) + ' 个文件</div></div>';
         }
         html += '</div>';
       }
@@ -143,7 +157,8 @@ function renderOverview() {
   }
   html += '</div>';
 
-  html += '</div></div>';
+  html += '</div>'; // tree-level-2
+  html += '</div>'; // overview-container
   main.innerHTML = html;
 }
 
